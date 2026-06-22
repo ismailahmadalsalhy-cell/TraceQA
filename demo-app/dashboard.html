@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Demo — Dashboard</title>
+  </head>
+  <body>
+    <main>
+      <h1 data-testid="dashboard-greeting">Welcome</h1>
+    </main>
+
+    <script>
+      // Read the signed-in user's name handed over by the login page.
+      const user = new URLSearchParams(location.search).get('u');
+      if (user) {
+        document.querySelector('[data-testid="dashboard-greeting"]').textContent = 'Welcome, ' + user;
+      }
+    </script>
+  </body>
+</html>

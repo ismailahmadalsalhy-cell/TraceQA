@@ -1,0 +1,22 @@
+{
+  "name": "ai-qa-pipeline",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AI-authored, plain-Playwright-run QA pipeline. AI is spent only when something is created or has broken — never on the happy path.",
+  "scripts": {
+    "test": "playwright test",
+    "test:smoke": "playwright test --grep @smoke",
+    "gen:index": "tsx scripts/generate-index.ts",
+    "gen:report": "tsx scripts/generate-report.ts",
+    "sync:skills": "tsx scripts/sync-skills.ts",
+    "postinstall": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1",
+    "@types/node": "^22.10.5",
+    "gray-matter": "^4.0.3",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "flow": "login",
+  "url": "/login.html",
+  "description": "Authenticate a registered user with email + password.",
+  "discovered_at": "2026-06-22",
+  "verified": true,
+  "elements": {
+    "email field": {
+      "selector": "getByTestId('login-email')",
+      "strategy": "data-testid",
+      "confidence": "high"
+    },
+    "password field": {
+      "selector": "getByTestId('login-password')",
+      "strategy": "data-testid",
+      "confidence": "high"
+    },
+    "submit button": {
+      "selector": "getByRole('button', { name: 'Sign in' })",
+      "strategy": "accessible",
+      "confidence": "medium"
+    },
+    "error message": {
+      "selector": "getByTestId('login-error')",
+      "strategy": "data-testid",
+      "confidence": "high"
+    },
+    "dashboard greeting": {
+      "selector": "getByTestId('dashboard-greeting')",
+      "strategy": "data-testid",
+      "confidence": "high"
+    }
+  },
+  "steps": [
+    { "action": "goto", "target": "url" },
+    { "action": "fill", "target": "email field", "value": "<email>" },
+    { "action": "fill", "target": "password field", "value": "<password>" },
+    { "action": "click", "target": "submit button" }
+  ]
+}

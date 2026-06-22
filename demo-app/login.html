@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Demo — Sign in</title>
+  </head>
+  <body>
+    <main>
+      <h1>Sign in</h1>
+
+      <!--
+        This page deliberately exposes selectors at every rung of the ladder so the
+        seed test and steps/login.json can demonstrate it:
+          - data-testid   (high confidence)
+          - <label for>    enables accessible "get by label" / role + name (medium)
+          - element/CSS    structural fallback (low confidence — flagged)
+      -->
+      <form id="login-form" novalidate>
+        <p>
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" data-testid="login-email" autocomplete="username" />
+        </p>
+        <p>
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" data-testid="login-password" autocomplete="current-password" />
+        </p>
+        <button type="submit" data-testid="login-submit">Sign in</button>
+      </form>
+
+      <p id="error" data-testid="login-error" role="alert" hidden></p>
+    </main>
+
+    <script>
+      // Static stand-in for a real auth backend — just enough to make the
+      // login flow observable end to end. No network, no framework.
+      const VALID = { email: 'test@example.com', password: 'Passw0rd!', name: 'Test User' };
+
+      document.getElementById('login-form').addEventListener('submit', (event) => {
+        event.preventDefault();
+        const email = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value;
+        const error = document.getElementById('error');
+
+        if (email === VALID.email && password === VALID.password) {
+          location.assign('dashboard.html?u=' + encodeURIComponent(VALID.name));
+        } else {
+          error.textContent = 'Invalid email or password.';
+          error.hidden = false;
+        }
+      });
+    </script>
+  </body>
+</html>
