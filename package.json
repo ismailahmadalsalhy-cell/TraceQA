@@ -9,6 +9,11 @@
     "test:smoke": "playwright test --grep @smoke",
     "gen:index": "tsx scripts/generate-index.ts",
     "gen:report": "tsx scripts/generate-report.ts",
+    "gen:report:editorial": "tsx scripts/generate-report.ts --theme=editorial",
+    "gen:report:dark": "tsx scripts/generate-report.ts --theme=dark",
+    "gen:dashboard": "tsx scripts/generate-dashboard.ts",
+    "gen:dashboard:editorial": "tsx scripts/generate-dashboard.ts --theme=editorial",
+    "gen:dashboard:dark": "tsx scripts/generate-dashboard.ts --theme=dark",
     "sync:skills": "tsx scripts/sync-skills.ts",
     "postinstall": "playwright install chromium"
   },
