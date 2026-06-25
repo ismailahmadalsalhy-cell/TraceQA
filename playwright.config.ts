@@ -21,11 +21,14 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
 
-  // HTML for humans, JSON for generate-report.ts. Both timestamped.
+  // HTML for humans, JSON for generate-report.ts. Both timestamped. The rebuild
+  // reporter is LAST so it runs after the JSON file lands and can read this run.
   reporter: [
     ['list'],
     ['json', { outputFile: `${runDir}/results.json` }],
     ['html', { outputFolder: `${runDir}/html-report`, open: 'never' }],
+    // After every run, regenerate reports/coverage.html + reports/dashboard.html.
+    ['./scripts/rebuild-reports.ts'],
   ],
 
   use: {

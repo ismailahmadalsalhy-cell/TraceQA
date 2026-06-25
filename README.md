@@ -5,6 +5,15 @@ requirements into a maintained test suite and an HTML coverage + traceability
 report. A runnable skeleton with the conventions in place — see
 [`DESIGN.md`](DESIGN.md) for the reasoning.
 
+![TraceQA dashboard — live test status](docs/preview-dashboard.png)
+
+> **The deliverable** is an offline HTML report — two views sharing one design
+> system: a live **dashboard** (above) and a formal **Requirements Traceability
+> Matrix** (below). Both are generated from `requirements/index.md` + the latest
+> Playwright run, and open by double-click — no server, no network.
+
+![TraceQA — Requirements Traceability Matrix](docs/preview-matrix.png)
+
 ## Core principle
 
 **AI is spent only when something is created or breaks — never on the happy
@@ -39,6 +48,7 @@ sources/       original imported docs, linked via `source`
 skills/        the 4 AI skills — source of truth; mirrored to .claude/skills/
 scripts/       deterministic generators (no AI)
 demo-app/      bundled target app so the template runs offline
+docs/          README preview images (committed)
 reports/ test-results/   GENERATED, gitignored
 ```
 
@@ -86,8 +96,15 @@ Body = acceptance criteria in **Given / When / Then**.
 |---|---|
 | `npm test` · `npm run test:smoke` | Run all · `@smoke` only |
 | `npm run gen:index` | requirements → `index.md` (metadata-only) |
-| `npm run gen:report` | index + latest run → `coverage.html` |
+| `npm run gen:report` | index + latest run → `coverage.html` (the RTM) |
+| `npm run gen:dashboard` | index + latest run → `dashboard.html` (live view) |
 | `npm run sync:skills` | mirror `skills/` → `.claude/skills/` (re-run after editing a skill) |
+
+**Reports rebuild automatically after every run.** A Playwright reporter
+([`scripts/rebuild-reports.ts`](scripts/rebuild-reports.ts), listed last)
+regenerates both `coverage.html` and `dashboard.html` from the results that just
+landed, so `reports/` always reflects the latest run — the manual `gen:report` /
+`gen:dashboard` are only for rebuilding without re-running the suite.
 
 **Pipeline** (all deterministic, no AI):
 `requirements/*.md → index.md`, then `index.md` + `test-results/<latest>/results.json → coverage.html`.
