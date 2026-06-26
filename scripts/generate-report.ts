@@ -1,26 +1,4 @@
-/**
- * generate-report.ts — DETERMINISTIC. No AI. No LLM call anywhere in here.
- *
- * Reads requirements/index.md (metadata-only) + the latest timestamped
- * test-results/<run>/results.json (plain Playwright JSON), and writes
- * reports/coverage.html — the product: an HTML Requirements Traceability Matrix.
- *
- * Per requirement it shows: status, linked tests, pass / fail / flaky / skipped,
- * coverage gaps (uncovered), and BLOCKED state — if a dependency's test failed,
- * the dependent is marked blocked rather than reported as an independent failure,
- * because running it would emit a false signal.
- *
- * Groupable by requirement and by suite (the two tagging axes).
- *
- * Correlation between a requirement and its test results is by, in order:
- *   1. the requirement-ID tag on the test  (e.g. @FR-AUTH-001)   ← primary
- *   2. the requirement ID appearing in the test title
- *   3. a linked_tests path matching the test file
- *
- * Shares its visual language with scripts/generate-dashboard.ts via
- * ./assets/report-theme.ts. Render either look with `--theme=editorial`
- * (or THEME=editorial); default is dark.
- */
+// Reads requirements/index.md + latest test-results/<run>/results.json → reports/coverage.html (RTM).
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import {
@@ -66,7 +44,6 @@ const toPosix = (p: string): string => p.split(/[\\/]/).join('/');
 const escapeHtml = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-// ── Parse the metadata-only index ────────────────────────────────────────────
 function parseIndex(md: string): RequirementMeta[] {
   const rows: RequirementMeta[] = [];
   let inTable = false;
@@ -87,10 +64,10 @@ function parseIndex(md: string): RequirementMeta[] {
     }
     const cells = line.split('|').slice(1, -1).map((c) => c.trim());
     if ((cells[0] ?? '').toLowerCase() === 'id') {
-      inTable = true; // header row
+      inTable = true;
       continue;
     }
-    if (cells.every((c) => /^:?-+:?$/.test(c))) continue; // separator row
+    if (cells.every((c) => /^:?-+:?$/.test(c))) continue;
     if (!inTable || cells.length < 6) continue;
 
     rows.push({
@@ -105,14 +82,13 @@ function parseIndex(md: string): RequirementMeta[] {
   return rows;
 }
 
-// ── Find the latest run and parse its Playwright JSON ────────────────────────
 async function findLatestRun(): Promise<{ run: string; json: any } | null> {
   let names: string[];
   try {
     names = (await fs.readdir(RESULTS_DIR, { withFileTypes: true }))
       .filter((e) => e.isDirectory())
       .map((e) => e.name)
-      .sort(); // ISO-ish timestamps sort chronologically
+      .sort(); // ISO timestamps sort lexicographically = chronologically
   } catch {
     return null;
   }
@@ -121,18 +97,16 @@ async function findLatestRun(): Promise<{ run: string; json: any } | null> {
       const raw = await fs.readFile(path.join(RESULTS_DIR, run, 'results.json'), 'utf8');
       return { run, json: JSON.parse(raw) };
     } catch {
-      /* no results.json in this folder — keep looking */
+      // no results.json — try next
     }
   }
   return null;
 }
 
-// Playwright's JSON reporter stores tags WITHOUT the leading "@"; the inline
-// title style keeps it. Normalize to exactly one "@" so both forms compare equal.
+// Normalize to one leading "@" — Playwright JSON omits it, inline titles keep it.
 const normTag = (t: unknown): string => '@' + String(t).replace(/^@+/, '');
 
-// Requirement-axis tags look like @FR-AUTH-001 (area code + number). Anything
-// else (@smoke, @sprint10) is a suite-axis tag.
+// Req tags: @AREA-CODE-NNN (e.g. @FR-AUTH-001). Anything else is a suite tag.
 const isReqTag = (tag: string): boolean => /^@[A-Za-z]{2,}-[A-Za-z0-9]+-\d+$/i.test(tag);
 
 function flattenSpecs(json: any): SpecResult[] {
@@ -147,8 +121,6 @@ function flattenSpecs(json: any): SpecResult[] {
       else if (statuses.includes('flaky')) outcome = 'flaky';
       else if (statuses.length > 0 && statuses.every((s) => s === 'skipped')) outcome = 'skipped';
 
-      // Tags from the tag option, unioned with any @tokens in the title, all
-      // normalized to a single leading "@".
       const fromTitle = String(spec.title ?? '').match(/@[\w-]+/g) ?? [];
       const tags = Array.from(new Set([...(spec.tags ?? []), ...fromTitle].map(normTag)));
 
@@ -190,7 +162,6 @@ function aggregate(specs: SpecResult[]): Outcome {
   return 'pass';
 }
 
-// ── Build view model ─────────────────────────────────────────────────────────
 interface Row {
   req: RequirementMeta;
   specs: SpecResult[];
@@ -204,7 +175,7 @@ interface Row {
 function build(reqs: RequirementMeta[], specs: SpecResult[]): Row[] {
   const byId = new Map(reqs.map((r) => [r.id, r] as const));
 
-  // Pass 1 — each requirement's own coverage.
+  // Pass 1: raw coverage per requirement.
   const cov = new Map<string, Coverage>();
   const related = new Map<string, SpecResult[]>();
   for (const req of reqs) {
@@ -216,8 +187,7 @@ function build(reqs: RequirementMeta[], specs: SpecResult[]): Row[] {
     cov.set(req.id, coverage);
   }
 
-  // Pass 2 — blocked propagation: blocked if any dependency (transitively) failed
-  // or is itself blocked. Fixed point, cycle-safe.
+  // Pass 2: propagate blocked state transitively; fixed-point loop is cycle-safe.
   const blocked = new Set<string>();
   for (let i = 0; i < reqs.length + 1; i++) {
     let changed = false;
@@ -258,7 +228,6 @@ function build(reqs: RequirementMeta[], specs: SpecResult[]): Row[] {
   });
 }
 
-// ── Render helpers (shared design-system classes from report-theme.ts) ───────
 const pct = (n: number, d: number): number => (d > 0 ? Math.round((n / d) * 100) : 0);
 
 const RESULT_LABEL: Record<string, string> = {
@@ -277,8 +246,7 @@ const resultBadge = (eff: string): string =>
 const statusBadge = (status: string): string =>
   `<span class="badge s-${escapeHtml(status)}"><i class="dot"></i>${escapeHtml(status)}</span>`;
 
-// The Verified column — the RTM convention: one ✓/✗ verification mark per
-// requirement, derived from its effective state, so the grid reads at a glance.
+// RTM Verified column: one mark per requirement derived from effective state.
 const VERIFY: Record<string, { g: string; c: string; t: string }> = {
   pass: { g: '✓', c: 'v-pass', t: 'Verified — linked test passing' },
   fail: { g: '✗', c: 'v-fail', t: 'Not verified — test failing' },
@@ -293,15 +261,13 @@ const verifyCell = (eff: string): string => {
   return `<span class="verdict ${v.c}" title="${escapeHtml(v.t)}" aria-label="${escapeHtml(v.t)}">${v.g}</span>`;
 };
 
-// reports/coverage.html sits one level under the repo root; requirement paths in
-// the index are repo-relative, spec files from Playwright are relative to tests/.
+// coverage.html is one level under root; req paths are root-relative, specs are tests/-relative.
 const reqHref = (p: string): string => '../' + toPosix(p);
 const specHref = (file: string): string => {
   const f = toPosix(file);
   return '../' + (f.startsWith('tests/') ? f : 'tests/' + f);
 };
 
-// ── Render ───────────────────────────────────────────────────────────────────
 function render(rows: Row[], run: string | null, stats: any, generatedAt: string, theme: Theme): string {
   const allSuites = Array.from(new Set(rows.flatMap((r) => r.suites))).sort();
 
@@ -314,7 +280,6 @@ function render(rows: Row[], run: string | null, stats: any, generatedAt: string
   const uncovered = count((r) => r.effective === 'uncovered');
   const coveredPct = pct(covered, total);
 
-  // ── Coverage meter — every requirement in exactly one effective bucket ──────
   const DIST_ORDER: Effective[] = ['pass', 'flaky', 'fail', 'blocked', 'no-results', 'skipped', 'uncovered'];
   const distSegments = DIST_ORDER.map((e) => ({ e, n: count((r) => r.effective === e) })).filter((d) => d.n > 0);
   const meterBar = total
@@ -345,9 +310,6 @@ function render(rows: Row[], run: string | null, stats: any, generatedAt: string
   const docRow = (k: string, v: string): string =>
     `<div class="doc-row"><dt>${escapeHtml(k)}</dt><dd>${v}</dd></div>`;
 
-  // The matrix presents as a controlled quality record — a document-control
-  // block, not a KPI tile grid. This is what keeps it from reading like the
-  // dashboard: a title block on the right, a serif document title on the left.
   const docMeta = `<div class="doc-meta">
               <div class="doc-meta-head"><span>Document control</span><span class="doc-stamp">${escapeHtml(
                 docStamp,
@@ -400,7 +362,6 @@ function render(rows: Row[], run: string | null, stats: any, generatedAt: string
       }</span>`
     : '<span class="nav-health is-idle"><i class="dot"></i>no run yet</span>';
 
-  // ── Last run strip ──────────────────────────────────────────────────────────
   const lastRun = run
     ? `<div class="grid">
         <div class="kv"><div class="k">Run</div><div class="v"><code>${escapeHtml(run)}</code></div></div>
@@ -413,7 +374,6 @@ function render(rows: Row[], run: string | null, stats: any, generatedAt: string
       </div>`
     : `<div class="notice">No test run found — run <code>npm test</code>, then <code>npm run gen:report</code>.</div>`;
 
-  // ── By-requirement matrix ───────────────────────────────────────────────────
   const cell = (xs: string[], wrap: (x: string) => string): string =>
     xs.length ? xs.map(wrap).join(' ') : '<span class="muted">—</span>';
 
@@ -425,7 +385,7 @@ function render(rows: Row[], run: string | null, stats: any, generatedAt: string
             .join('<br>')
         : '<span class="muted">—</span>';
       const deps = cell(r.req.depends_on, (d) => `<code>${escapeHtml(d)}</code>`);
-      // Blocked-by folds into Notes so the grid keeps a clean, standard column set.
+      // Fold blockedBy into Notes — avoids an extra column in the grid.
       const noteParts = [...r.notes];
       if (r.blockedBy.length) noteParts.unshift('Blocked by ' + r.blockedBy.join(', '));
       const notes = noteParts.length ? noteParts.map(escapeHtml).join('<br>') : '<span class="muted">—</span>';
@@ -452,7 +412,6 @@ function render(rows: Row[], run: string | null, stats: any, generatedAt: string
     )
     .join('');
 
-  // ── By-suite breakdown — one card per suite tag ─────────────────────────────
   const suiteBlocks = allSuites.length
     ? allSuites
         .map((suite) => {
@@ -489,7 +448,6 @@ ${items}
         .join('\n')
     : '    <p class="muted">No suite tags found in the latest run.</p>';
 
-  // ── Legend ──────────────────────────────────────────────────────────────────
   const legend = `    <div class="attn">
       <h3><span>Legend</span></h3>
       <p class="muted">The status and result vocabulary used across the matrix.</p>
@@ -513,8 +471,7 @@ ${items}
     ['legend', 'Legend'],
   ];
 
-  // Page-specific rules layered on top of the shared system: the document-cover
-  // hero and the gridded, spreadsheet-style traceability matrix.
+  // Page-local CSS: doc-cover hero + spreadsheet-style matrix grid.
   const localCss = `
   .suite-block { margin-bottom: 1.4rem; }
   .suite-block:last-child { margin-bottom: 0; }
@@ -561,7 +518,6 @@ ${items}
   .v-pass { color: var(--pass-fg); } .v-fail { color: var(--fail-fg); } .v-flaky { color: var(--flaky-fg); }
   .v-blocked { color: var(--blue-fg); } .v-amber { color: var(--amber-fg); } .v-grey { color: var(--ink-3); }`;
 
-  // ── Document ────────────────────────────────────────────────────────────────
   return `<!doctype html>
 <html lang="en">
 <head>

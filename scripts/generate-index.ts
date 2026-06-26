@@ -1,18 +1,4 @@
-/**
- * generate-index.ts — DETERMINISTIC. No AI. No LLM call anywhere in here.
- *
- * Scans every requirement file under requirements/, reads ONLY its YAML
- * frontmatter, and writes requirements/index.md as a metadata-only table.
- *
- * Why metadata-only: the index is the orientation layer. It is read FIRST to
- * decide which requirement files to load (selective loading is what saves
- * tokens), and it doubles as the dependency graph + the backbone of the
- * coverage report. Concatenating requirement bodies here would duplicate the
- * whole corpus, drift the instant one copy is edited, and reload everything on
- * every read. So: frontmatter only, never bodies.
- *
- * Idempotent: the same frontmatter in produces byte-identical index.md out.
- */
+// generate-index.ts — requirement frontmatter → requirements/index.md (metadata-only, idempotent). No AI.
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import matter from 'gray-matter';

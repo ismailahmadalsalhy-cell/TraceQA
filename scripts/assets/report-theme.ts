@@ -1,37 +1,13 @@
-/**
- * report-theme.ts — the shared visual language for the two generated reports.
- *
- * DETERMINISTIC. No AI, no network. Both scripts/generate-dashboard.ts and
- * scripts/generate-report.ts inline what this module returns, so the dashboard
- * and the coverage matrix share one design system and can each render either
- * theme:
- *
- *   - "dark"      Ethereal Glass — OLED black, drifting aurora, vantablack glass,
- *                 Geist grotesk. (default)
- *   - "editorial" warm cream paper, espresso ink, high-contrast Fraunces serif
- *                 display, faint film grain.
- *
- * Selected with `--theme=editorial` on the generator's argv, or THEME=editorial
- * in the environment; anything else is "dark". The whole look is expressed as CSS
- * custom properties (tokens) over a shared component sheet, so switching a theme
- * is a token swap — not a second stylesheet to maintain.
- *
- * The fonts are base64-embedded (see geist-fonts.ts / fraunces-fonts.ts) so every
- * report still opens by double-click and renders with no internet connection.
- */
+// report-theme.ts — shared CSS/HTML design system for dashboard and matrix reports.
 import { GEIST_SANS_WOFF2_B64, GEIST_MONO_WOFF2_B64 } from './geist-fonts.ts';
 import { FRAUNCES_WOFF2_B64 } from './fraunces-fonts.ts';
 
 export type Theme = 'dark' | 'editorial';
 
-// Which of the two reports is being rendered. The pages share one creamy world
-// but carry distinct identities so they can never be mistaken for each other:
-//   - "matrix"    the formal traceability document — serif display, ink accent.
-//   - "dashboard" the live operations view — grotesk display, warm clay accent.
+// "matrix" = traceability doc (serif); "dashboard" = live ops view (grotesk).
 export type Page = 'matrix' | 'dashboard';
 
-// argv `--theme=` wins over the THEME env var (cross-platform: no shell needed).
-// The soft-creamy "editorial" look is the default now; "dark" is opt-in.
+// --theme= argv wins over THEME env var; "editorial" is default.
 export function resolveTheme(): Theme {
   const arg = process.argv.find((a) => a.startsWith('--theme='));
   const raw = (arg ? arg.slice('--theme='.length) : process.env.THEME ?? 'editorial').toLowerCase();
@@ -42,7 +18,6 @@ const esc = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const b64 = (svg: string): string => Buffer.from(svg).toString('base64');
 
-// ── Inline SVG assets (favicon per theme, one shared film-grain tile) ─────────
 export function faviconUri(theme: Theme): string {
   const [bg, fg] = theme === 'editorial' ? ['#3b2f24', '#f7f2e8'] : ['#0a0c10', '#5fd99a'];
   const svg =
@@ -60,7 +35,7 @@ const GRAIN_SVG =
   `<rect width="100%" height="100%" filter="url(#g)"/></svg>`;
 const GRAIN_URI = `data:image/svg+xml;base64,${b64(GRAIN_SVG)}`;
 
-// Hand-rolled line icons (deliberately not a default icon set), one stroke weight.
+// Custom icons — not a standard icon set; single stroke weight throughout.
 export const ICONS = {
   check: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6.5 9.2 17.3 4 12.1"/></svg>',
   arrow: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7"/><path d="M9 7h8v8"/></svg>',
@@ -70,7 +45,6 @@ export const ICONS = {
   flag: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4.4M6 4.4h11l-2.2 3.9L17 12H6"/></svg>',
 } as const;
 
-// ── @font-face — Geist always; Fraunces only when the editorial theme needs it ─
 function fontFaces(theme: Theme): string {
   const geist = `
   @font-face { font-family: "Geist"; font-style: normal; font-weight: 100 900; font-display: swap; src: url(data:font/woff2;base64,${GEIST_SANS_WOFF2_B64}) format("woff2"); }
@@ -83,12 +57,8 @@ function fontFaces(theme: Theme): string {
   );
 }
 
-// ── Theme tokens — every value the shared component sheet reads through var() ──
 function tokens(theme: Theme): string {
   if (theme === 'editorial') {
-    // Soft-creamy: oat-milk paper, warm cocoa ink (never near-black), muted
-    // pastel status hues, and warm diffuse shadows. Lower contrast than a stark
-    // black-on-white doc — it should read like warm paper, not a screen.
     return `
     --bg: #f4eddf;
     --ink-0: #342a20; --ink-1: #4c4133; --ink-2: #786a58; --ink-3: #9d8f7a; --ink-4: #c6b8a1;
@@ -152,7 +122,6 @@ function tokens(theme: Theme): string {
     --grey-fg: #929bac; --grey-bg: rgba(255,255,255,.05); --grey-line: rgba(255,255,255,.12);`;
 }
 
-// ── Shared component sheet — theme-agnostic, every surface read through var() ──
 const COMPONENTS = `
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
@@ -164,21 +133,17 @@ const COMPONENTS = `
   code { font-family: var(--mono); font-size: .82em; background: var(--code-bg); border: 1px solid var(--line); padding: .08em .42em; border-radius: 6px; color: var(--ink-1); }
   .ic { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 
-  /* Ambient background layers. */
   .aurora { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
   .orb { position: absolute; border-radius: 50%; will-change: transform; }
   .grain { position: fixed; inset: 0; z-index: 1; pointer-events: none; background-image: url("${GRAIN_URI}"); background-size: 150px; }
   main, footer { position: relative; z-index: 2; }
 
-  /* Floating-island nav. */
   .topbar { position: fixed; top: 0; left: 0; right: 0; z-index: 100; display: flex; justify-content: center; padding: 0 1rem; pointer-events: none; }
   .nav-island { pointer-events: auto; margin-top: 18px; width: max-content; max-width: 100%; display: flex; align-items: center; gap: .4rem; padding: .45rem .5rem .45rem .7rem; border-radius: 999px; background: var(--nav-bg); border: 1px solid var(--nav-border); box-shadow: var(--inset), var(--nav-shadow); }
   .brand { display: flex; align-items: center; gap: .5rem; flex: none; padding: .1rem .3rem; }
   .brand-mark { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; background: var(--mark-bg); border: 1px solid var(--mark-line); box-shadow: inset 0 1px 0 rgba(255,255,255,.12); }
   .brand-mark .ic { width: 15px; stroke: var(--mark-ic); stroke-width: 2.4; }
   .brand-name { color: var(--ink-0); font-family: var(--display); font-weight: 620; letter-spacing: -.01em; font-size: 1.02rem; }
-  /* Page-identity chip — names the page (Matrix / Dashboard) in the page accent
-     so the two reports are never mistaken for one another at a glance. */
   .nav-tag { flex: none; font-family: var(--mono); font-size: .58rem; font-weight: 600; text-transform: uppercase; letter-spacing: .14em; color: var(--accent-fg); background: var(--accent-grad); border: 1px solid var(--accent-line); padding: .26rem .5rem; border-radius: 7px; box-shadow: var(--inset); }
   .nav-div { width: 1px; height: 18px; background: var(--line-2); flex: none; }
   .nav-links { display: flex; align-items: center; gap: .1rem; }
@@ -205,7 +170,6 @@ const COMPONENTS = `
   .ov-link:hover { color: var(--ink-0); }
   .ov-num { font-family: var(--mono); font-size: .8rem; color: var(--ink-3); font-weight: 500; }
 
-  /* Layout & macro-whitespace. */
   main { max-width: 1140px; margin: 0 auto; padding: 116px clamp(1.1rem, 4vw, 2rem) 1rem; }
   section { scroll-margin-top: 104px; margin: 0 0 clamp(3rem, 7vw, 5.5rem); }
   .sec-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem 1.4rem; flex-wrap: wrap; margin-bottom: 1.4rem; }
@@ -214,12 +178,10 @@ const COMPONENTS = `
   h2 { margin: 0; font-family: var(--display); font-size: 1.3rem; font-weight: 560; letter-spacing: -.02em; color: var(--ink-0); display: flex; align-items: baseline; gap: .5rem; }
   .sec-count { font-family: var(--mono); font-size: .78rem; font-weight: 500; color: var(--ink-3); background: var(--glass-1); border: 1px solid var(--line-2); border-radius: 999px; padding: .05rem .5rem; }
 
-  /* Double-Bezel: outer shell (machined tray) + inner core (the surface). */
   .shell { background: var(--shell-bg); border: 1px solid var(--line); border-radius: 24px; padding: 7px; box-shadow: var(--shadow-card); }
   .core { position: relative; background: var(--core-bg); border: 1px solid var(--line); border-radius: 17px; box-shadow: var(--inset); overflow: hidden; }
   .table-wrap { overflow-x: auto; }
 
-  /* Hero. */
   .hero { margin-bottom: clamp(3rem, 7vw, 5.5rem); }
   .hero-shell { border-radius: 34px; padding: 8px; }
   .hero-core { position: relative; overflow: hidden; border-radius: 26px; padding: clamp(1.6rem, 3.4vw, 2.6rem); background: var(--core-bg); }
@@ -233,7 +195,6 @@ const COMPONENTS = `
   .figure-sub { margin: 1rem 0 0; color: var(--ink-2); font-size: .98rem; max-width: 46ch; text-wrap: pretty; line-height: 1.5; }
   .hero-cta { display: flex; flex-wrap: wrap; gap: .7rem; margin-top: 1.7rem; }
 
-  /* Island buttons — magnetic press + nested button-in-button trailing icon. */
   .btn { display: inline-flex; align-items: center; gap: .7rem; border-radius: 999px; font: inherit; font-weight: 550; font-size: .92rem; cursor: pointer; transition: transform .5s cubic-bezier(.32,.72,0,1), background-color .4s ease, border-color .4s ease, box-shadow .4s ease, color .3s ease; will-change: transform; }
   .btn:active { transform: scale(.975); }
   .btn-primary { color: var(--accent-fg); padding: .55rem .55rem .55rem 1.25rem; background: var(--accent-grad); border: 1px solid var(--accent-line); box-shadow: inset 0 1px 0 rgba(255,255,255,.32), 0 12px 32px -12px var(--accent-line); }
@@ -261,14 +222,12 @@ const COMPONENTS = `
   .m-blocked { background: var(--blue-solid); } .m-skipped { background: var(--ink-4); } .m-notrun { background: var(--amber-solid); }
   .m-uncovered { background: var(--meter-uncovered); }
 
-  /* Last run / key-value panel — single card. */
   .grid { display: flex; flex-wrap: wrap; gap: 1.4rem 2.4rem; align-items: center; padding: 1.3rem 1.5rem; background: var(--panel-bg); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--inset), var(--shadow-soft); }
   .kv .k { font-size: .66rem; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-3); }
   .kv .v { margin-top: .28rem; font-size: .95rem; color: var(--ink-0); font-variant-numeric: tabular-nums; }
   .kv .v code { font-size: .82rem; }
   .notice { background: var(--amber-bg); color: var(--amber-fg); border: 1px solid var(--amber-line); border-radius: 14px; padding: .9rem 1.2rem; font-weight: 560; }
 
-  /* Filter controls. */
   .filterbar { display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; }
   .filterbar .label { font-size: .68rem; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-3); margin-right: .15rem; }
   .pill { border: 1px solid var(--line-2); background: var(--glass-1); color: var(--ink-1); border-radius: 999px; padding: .3rem .8rem; font: inherit; font-size: .8rem; cursor: pointer; transition: border-color .3s cubic-bezier(.32,.72,0,1), background-color .3s cubic-bezier(.32,.72,0,1), color .3s ease, transform .1s ease; }
@@ -280,7 +239,6 @@ const COMPONENTS = `
   .clear-filters { border: 0; background: none; color: var(--ink-2); cursor: pointer; font: inherit; font-size: .8rem; padding: .3rem .4rem; border-radius: 6px; text-decoration: underline; text-underline-offset: 2px; transition: color .3s ease; }
   .clear-filters:hover { color: var(--ink-0); }
 
-  /* Tables. */
   table { border-collapse: collapse; width: 100%; min-width: 560px; }
   th, td { text-align: left; padding: .8rem 1rem; border-bottom: 1px solid var(--line); vertical-align: top; }
   thead th { background: var(--th-bg); font-size: .67rem; text-transform: uppercase; letter-spacing: .08em; font-weight: 600; color: var(--ink-3); border-bottom: 1px solid var(--line-2); }
@@ -292,7 +250,6 @@ const COMPONENTS = `
   td code { white-space: nowrap; }
   td.notes { color: var(--ink-3); font-size: .85em; }
 
-  /* Badges & dots — status carries a dot, tags don't. */
   .badge { display: inline-flex; align-items: center; gap: .42em; padding: .2em .62em; border-radius: 8px; font-size: .75rem; font-weight: 560; line-height: 1.35; border: 1px solid transparent; white-space: nowrap; }
   .badge .dot { width: .5em; height: .5em; border-radius: 50%; background: currentColor; flex: none; box-shadow: var(--dot-glow); }
   .b-pass, .s-documented { color: var(--pass-fg); background: var(--pass-bg); border-color: var(--pass-line); }
@@ -308,13 +265,11 @@ const COMPONENTS = `
   .pf { font-weight: 560; font-size: .8rem; font-variant-numeric: tabular-nums; margin-left: .1rem; }
   .pf-pass { color: var(--pass-fg); } .pf-fail { color: var(--fail-fg); } .pf-flaky { color: var(--flaky-fg); } .pf-skip { color: var(--ink-2); }
 
-  /* Pass-rate meter (suites). */
   .rate { display: flex; align-items: center; gap: .7rem; min-width: 160px; }
   .rate-track { position: relative; flex: 1; height: 7px; border-radius: 999px; background: var(--meter-track); overflow: hidden; box-shadow: inset 0 0 0 1px var(--line); }
   .rate-fill { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--pass-solid); box-shadow: var(--rate-glow); }
   .rate-n { min-width: 3ch; text-align: right; font-size: .78rem; font-weight: 560; color: var(--ink-1); }
 
-  /* Needs attention. */
   .attn { background: var(--glass-1); border: 1px solid var(--line); border-left: 2px solid var(--line-2); border-radius: 16px; padding: 1.1rem 1.25rem; margin-bottom: .9rem; box-shadow: var(--inset); }
   .attn h3 { display: flex; align-items: center; gap: .55rem; margin: 0; font-size: .98rem; font-weight: 600; color: var(--ink-0); }
   .attn h3 .ic { width: 1.05rem; }
@@ -330,13 +285,11 @@ const COMPONENTS = `
   .all-clear { display: flex; align-items: center; gap: .7rem; background: var(--pass-bg); color: var(--pass-fg); border: 1px solid var(--pass-line); border-radius: 16px; padding: 1.1rem 1.3rem; font-weight: 560; box-shadow: var(--inset); }
   .all-clear .ic { width: 1.2rem; }
 
-  /* Focus & footer. */
   a:focus-visible, button:focus-visible, select:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 8px; }
   footer { max-width: 1140px; margin: 2rem auto 0; padding: 1.6rem clamp(1.1rem, 4vw, 2rem) 3rem; border-top: 1px solid var(--line); font-size: .8rem; line-height: 1.8; color: var(--ink-3); position: relative; z-index: 2; }
   footer code { font-size: .78rem; }
   .hidden { display: none !important; }
 
-  /* Motion — scroll-reveal driven by IntersectionObserver, never a listener. */
   .reveal { transition: opacity .9s cubic-bezier(.22,.61,.36,1), transform .9s cubic-bezier(.22,.61,.36,1), filter .9s ease; }
   .will-reveal { opacity: 0; transform: translateY(26px); filter: blur(6px); will-change: opacity, transform; }
   .will-reveal.is-in { opacity: 1; transform: none; filter: none; }
@@ -347,14 +300,12 @@ const COMPONENTS = `
     .ov-link { transition: opacity .2s !important; transform: none !important; }
   }
 
-  /* Responsive collapse. */
   @media (min-width: 921px) { .nav-overlay { display: none; } }
   @media (max-width: 920px) { .nav-links, .nav-div { display: none; } .nav-toggle { display: grid; } }
   @media (max-width: 720px) { .hero-stats { min-width: 100%; } main { padding-top: 104px; } }
   @media (max-width: 560px) { .hero-stats { grid-template-columns: repeat(2, 1fr); } .figure { font-size: clamp(2.6rem, 15vw, 3.4rem); } .nav-health { display: none; } h2 { font-size: 1.18rem; } }
 `;
 
-// ── Theme-specific chrome that can't be reduced to a token ────────────────────
 function chrome(theme: Theme): string {
   if (theme === 'editorial') {
     return `
@@ -365,7 +316,7 @@ function chrome(theme: Theme): string {
   .nav-island { backdrop-filter: blur(14px) saturate(120%); -webkit-backdrop-filter: blur(14px) saturate(120%); }
   .nav-overlay { background: rgba(250,247,240,.86); backdrop-filter: blur(24px) saturate(120%); -webkit-backdrop-filter: blur(24px) saturate(120%); }
   select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2390806e' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
-  /* Fraunces wants the display optical cut and a touch less negative tracking than a grotesk. */
+  /* Fraunces optical cut: larger opsz + less-negative tracking than Geist. */
   .figure { font-variation-settings: "opsz" 140; font-weight: 560; letter-spacing: -.015em; }
   h2, .tile-n, .brand-name, .ov-link { font-variation-settings: "opsz" 96; }
   h2 { font-weight: 520; letter-spacing: -.01em; }
@@ -383,17 +334,11 @@ function chrome(theme: Theme): string {
   select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23929bac' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }`;
 }
 
-// ── Public composition helpers ────────────────────────────────────────────────
-// ── Per-page identity — distinct accent + display family per report ───────────
-// Same creamy paper, two characters: the matrix is an ink-on-cream printed
-// document (serif), the dashboard is a warm, live application (grotesk). The
-// dark theme keeps its single emerald accent for both pages (this only asks for
-// distinct creamy identities), so page styling applies to the editorial look.
+// Per-page identity: editorial only — dark theme shares one accent for both pages.
 function pageStyle(theme: Theme, page?: Page): string {
   if (!page || theme !== 'editorial') return '';
   if (page === 'dashboard') {
     return `
-  /* Dashboard — warm terracotta accent, grotesk display: reads as a live tool. */
   :root {
     --accent: #b0674a; --accent-fg: #fff7f0; --accent-grad: linear-gradient(180deg, #bd7656, #a85d3f);
     --accent-line: rgba(150,82,52,.5); --accent-ico: rgba(255,255,255,.18); --accent-ico-h: rgba(255,255,255,.26);
@@ -408,27 +353,21 @@ function pageStyle(theme: Theme, page?: Page): string {
   .tile-n { font-weight: 640; letter-spacing: -.02em; }
   .hero-aura { background: radial-gradient(680px 300px at 88% -45%, rgba(176,103,74,.22), transparent 68%); }`;
   }
-  // matrix — keep the ink accent (≈ editorial default) but warm the aura.
   return `
-  /* Matrix — espresso ink accent, Fraunces serif: a formal printed record. */
   :root { --spark: #7c6a52; --focus: #5b8a4f; }
   .hero-aura { background: radial-gradient(700px 320px at 86% -50%, rgba(120,96,66,.15), transparent 70%); }`;
 }
 
-/** The full inner CSS for `<style>…</style>` — fonts, tokens, components, chrome. */
 export function themeStyle(theme: Theme, page?: Page): string {
   return `${fontFaces(theme)}\n  :root {${tokens(theme)}\n  }\n${COMPONENTS}${chrome(theme)}${pageStyle(theme, page)}`;
 }
 
-/** Background-chrome markup for the top of <body> (aurora orbs only in dark). */
 export function backdrop(theme: Theme): string {
   const orbs = theme === 'dark' ? '<span class="orb orb-a"></span><span class="orb orb-b"></span>' : '';
   return `  <div class="aurora" aria-hidden="true">${orbs}</div>
   <div class="grain" aria-hidden="true"></div>`;
 }
 
-/** The floating-island nav + its mobile overlay. `items` = [anchorId, label][].
- *  `tag` names the page (e.g. "Matrix" / "Dashboard") in the page accent. */
 export function floatingNav(opts: {
   items: ReadonlyArray<readonly [string, string]>;
   health: string;
@@ -468,7 +407,6 @@ export function floatingNav(opts: {
   </div>`;
 }
 
-/** Shared motion: IntersectionObserver scroll-reveal + scroll-spy + island nav. */
 export function motionScript(): string {
   return `<script>
 (function () {

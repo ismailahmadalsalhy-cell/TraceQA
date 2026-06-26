@@ -1,7 +1,4 @@
-// Minimal zero-dependency static file server for the bundled demo app.
-// This is the "example target app" Playwright runs against so the template is
-// runnable offline. Replace it with your real application (set BASE_URL and drop
-// the webServer block in playwright.config.ts).
+// Zero-dependency static server for the bundled demo app — the offline Playwright target. Swap for your app via BASE_URL.
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';

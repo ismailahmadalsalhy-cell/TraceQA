@@ -1,14 +1,4 @@
-/**
- * sync-skills.ts — copy canonical skills/ → .claude/skills/.
- *
- * skills/ is the SOURCE OF TRUTH (human-authored, reviewed, committed).
- * .claude/skills/ is the location Claude Code auto-loads project skills from
- * (confirmed: .claude/skills/<name>/SKILL.md). We keep a committed mirror there
- * so native auto-loading works on a fresh clone.
- *
- * Re-run after editing any skills/**\/SKILL.md:  npm run sync:skills
- * Deterministic. No AI.
- */
+// sync-skills.ts — mirror canonical skills/ → committed .claude/skills/ (where Claude Code auto-loads). Re-run after editing a skill.
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 

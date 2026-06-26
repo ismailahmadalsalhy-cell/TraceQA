@@ -1,15 +1,8 @@
 import type { Reporter } from '@playwright/test/reporter';
 import { execSync } from 'node:child_process';
 
-/**
- * rebuild-reports.ts — a Playwright reporter that regenerates the TraceQA views
- * after every run. DETERMINISTIC, no AI.
- *
- * Listed LAST in playwright.config.ts `reporter`: reporters' onEnd run in array
- * order, so by the time this fires the JSON reporter has already written
- * test-results/<run>/results.json — the generators then pick up this exact run.
- * (A globalTeardown can't do this — it runs before the JSON file is flushed.)
- */
+// Regenerates both reports after each run. LAST in the reporter array so it runs
+// after the JSON reporter writes results.json (a globalTeardown fires too early).
 export default class RebuildReports implements Reporter {
   onEnd(): void {
     for (const script of ['gen:report', 'gen:dashboard']) {

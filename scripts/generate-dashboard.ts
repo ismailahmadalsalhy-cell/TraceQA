@@ -1,28 +1,4 @@
-/**
- * generate-dashboard.ts — DETERMINISTIC. No AI. No LLM call. No network.
- *
- * Reads requirements/index.md (metadata-only) + the latest timestamped
- * test-results/<run>/results.json (plain Playwright JSON), and writes a single
- * self-contained reports/dashboard.html — the project's visual landing view.
- *
- * The HTML opens by double-click: all CSS, JS, and fonts are inlined, there are
- * no external dependencies, and it renders with no internet connection. Filtering
- * is client-side vanilla JS.
- *
- * Data sources, and ONLY these two:
- *   1. requirements/index.md          — id, title, status, depends_on,
- *                                        linked_tests, path  (never the bodies)
- *   2. test-results/<latest>/results.json — the plain Playwright JSON
- *
- * Correlation between a requirement and its test results is, in order:
- *   1. the requirement-ID tag on the test  (e.g. @FR-AUTH-001)   ← primary
- *   2. the requirement ID appearing in the test title
- *   3. a linked_tests path matching the test file
- *
- * Shares the requirement↔result correlation conventions of scripts/generate-report.ts
- * (the two stay in step on DATA) and its visual language via ./assets/report-theme.ts.
- * Render either look with `--theme=editorial` (or THEME=editorial); default is dark.
- */
+// Deterministic dashboard generator: reads requirements/index.md + latest test-results JSON, writes reports/dashboard.html.
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import {
@@ -70,7 +46,6 @@ const toPosix = (p: string): string => p.split(/[\\/]/).join('/');
 const escapeHtml = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-// ── Parse the metadata-only index ────────────────────────────────────────────
 function parseIndex(md: string): RequirementMeta[] {
   const rows: RequirementMeta[] = [];
   let inTable = false;
@@ -91,7 +66,7 @@ function parseIndex(md: string): RequirementMeta[] {
     }
     const cells = line.split('|').slice(1, -1).map((c) => c.trim());
     if ((cells[0] ?? '').toLowerCase() === 'id') {
-      inTable = true; // header row
+      inTable = true;
       continue;
     }
     if (cells.every((c) => /^:?-+:?$/.test(c))) continue; // separator row
@@ -109,9 +84,7 @@ function parseIndex(md: string): RequirementMeta[] {
   return rows;
 }
 
-// ── Find the latest run and parse its Playwright JSON ────────────────────────
-// Timestamped folder names are ISO-8601 (…T13-27-06-041Z), so a lexical sort is
-// chronological — equivalent to ordering by mtime, but stable and side-effect-free.
+// ISO-8601 folder names are lexically chronological — no mtime needed.
 async function findLatestRun(): Promise<{ run: string; json: any } | null> {
   let names: string[];
   try {
@@ -127,18 +100,16 @@ async function findLatestRun(): Promise<{ run: string; json: any } | null> {
       const raw = await fs.readFile(path.join(RESULTS_DIR, run, 'results.json'), 'utf8');
       return { run, json: JSON.parse(raw) };
     } catch {
-      /* no results.json in this folder — keep looking */
+      /* keep looking */
     }
   }
   return null;
 }
 
-// Playwright's JSON reporter stores tags WITHOUT the leading "@"; the inline
-// title style keeps it. Normalize to exactly one "@" so both forms compare equal.
+// Normalize to exactly one "@" — Playwright JSON omits it, inline titles keep it.
 const normTag = (t: unknown): string => '@' + String(t).replace(/^@+/, '');
 
-// Requirement-axis tags look like @FR-AUTH-001 (area code + number). Anything
-// else (@smoke, @sprint10) is a suite-axis tag.
+// Req tags: @FR-AUTH-001 pattern. Everything else (@smoke, @sprint10) is a suite tag.
 const isReqTag = (tag: string): boolean => /^@[A-Za-z]{2,}-[A-Za-z0-9]+-\d+$/i.test(tag);
 
 function flattenSpecs(json: any): SpecResult[] {
@@ -153,8 +124,7 @@ function flattenSpecs(json: any): SpecResult[] {
       else if (statuses.includes('flaky')) outcome = 'flaky';
       else if (statuses.length > 0 && statuses.every((s) => s === 'skipped')) outcome = 'skipped';
 
-      // Tags from the tag option, unioned with any @tokens in the title, all
-      // normalized to a single leading "@".
+      // Union tag option + @tokens in title, normalized to single "@".
       const fromTitle = String(spec.title ?? '').match(/@[\w-]+/g) ?? [];
       const tags = Array.from(new Set([...(spec.tags ?? []), ...fromTitle].map(normTag)));
 
@@ -196,14 +166,13 @@ function aggregate(specs: SpecResult[]): Outcome {
   return 'pass';
 }
 
-// ── Build view model ─────────────────────────────────────────────────────────
 interface DepState {
   id: string;
   state: Effective | 'missing';
 }
 interface Row {
   req: RequirementMeta;
-  specs: SpecResult[]; // correlated test cases from the latest run
+  specs: SpecResult[];
   coverage: Coverage;
   effective: Effective;
   blockedBy: string[];
@@ -214,9 +183,7 @@ interface Row {
 function build(reqs: RequirementMeta[], specs: SpecResult[]): Row[] {
   const byId = new Map(reqs.map((r) => [r.id, r] as const));
 
-  // Pass 1 — each requirement's own coverage. A requirement with linked_tests
-  // but no correlated spec in the latest run is "no-results" (= not run), never
-  // silently treated as passing.
+  // Pass 1: linked_tests with no correlated spec → "no-results", not passing.
   const cov = new Map<string, Coverage>();
   const related = new Map<string, SpecResult[]>();
   for (const req of reqs) {
@@ -228,8 +195,7 @@ function build(reqs: RequirementMeta[], specs: SpecResult[]): Row[] {
     cov.set(req.id, coverage);
   }
 
-  // Pass 2 — blocked propagation: blocked if any dependency (transitively) failed
-  // or is itself blocked. Fixed point, cycle-safe.
+  // Pass 2: transitive blocked propagation — fixed-point, cycle-safe.
   const blocked = new Set<string>();
   for (let i = 0; i < reqs.length + 1; i++) {
     let changed = false;
@@ -260,7 +226,6 @@ function build(reqs: RequirementMeta[], specs: SpecResult[]): Row[] {
   });
 }
 
-// ── Formatting helpers ───────────────────────────────────────────────────────
 function fmtDuration(ms?: number): string {
   if (ms == null || Number.isNaN(ms)) return '—';
   if (ms < 1000) return `${Math.round(ms)} ms`;
@@ -274,12 +239,11 @@ function fmtTimestamp(iso?: string): string {
   if (!iso) return '—';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  // Deterministic, locale-independent UTC rendering: "2026-06-22 13:27:06 UTC".
+  // Format: "2026-06-22 13:27:06 UTC" — deterministic, locale-independent.
   return d.toISOString().replace('T', ' ').replace(/\.\d+Z$/, ' UTC');
 }
 
-// The suite filter actually applied to the run, recovered from the recorded argv
-// (Playwright serializes config.grep as an empty {}, so argv is the only signal).
+// Playwright serializes config.grep as {}, so argv is the only source for --grep.
 function parseSuiteFilter(argv: unknown): string | null {
   if (!Array.isArray(argv)) return null;
   for (let i = 0; i < argv.length; i++) {
@@ -292,11 +256,6 @@ function parseSuiteFilter(argv: unknown): string | null {
 
 const pct = (n: number, d: number): number => (d > 0 ? Math.round((n / d) * 100) : 0);
 
-// The favicon, film grain, line icons, @font-face faces and the entire visual
-// language live in ./assets/report-theme.ts so the dashboard and the coverage
-// matrix share one design system and both themes.
-
-// ── Render ───────────────────────────────────────────────────────────────────
 const RESULT_LABEL: Record<string, string> = {
   pass: 'pass',
   fail: 'fail',
@@ -308,18 +267,15 @@ const RESULT_LABEL: Record<string, string> = {
   missing: 'missing',
 };
 const resultClass = (eff: string): string => 'b-' + (eff === 'no-results' ? 'notrun' : eff);
-// Status segment / swatch fill class — decoupled from the badge classes so the
-// solid meter colours never collide with the soft badge backgrounds.
+// Separate meter class prefix ("m-") avoids collision with soft badge backgrounds ("b-").
 const meterClass = (eff: string): string => 'm-' + (eff === 'no-results' ? 'notrun' : eff);
-// A status pill carries a tinted dot + label: the dot keeps state legible where
-// colour alone wouldn't (small text, print, colour-vision deficiency).
+// Dot inside badge keeps state legible without relying solely on colour.
 const resultBadge = (eff: string): string =>
   `<span class="badge ${resultClass(eff)}"><i class="dot"></i>${escapeHtml(RESULT_LABEL[eff] ?? eff)}</span>`;
 const statusBadge = (status: string): string =>
   `<span class="badge s-${escapeHtml(status)}"><i class="dot"></i>${escapeHtml(status)}</span>`;
 
-// reports/dashboard.html sits one level under the repo root; requirement paths in
-// the index are repo-relative, spec files from Playwright are relative to tests/.
+// dashboard.html is one level below root; req paths are repo-relative, specs relative to tests/.
 const reqHref = (p: string): string => '../' + toPosix(p);
 const specHref = (file: string): string => {
   const f = toPosix(file);
@@ -375,7 +331,6 @@ function render(input: RenderInput): string {
   const allSuites = Array.from(new Set(specs.flatMap((s) => s.suiteTags))).sort();
   const allReqTags = Array.from(new Set(specs.flatMap((s) => s.reqTags))).sort();
 
-  // ── Section 1: coverage hero ────────────────────────────────────────────────
   const total = rows.length;
   const coveredCount = rows.filter((r) => r.req.linked_tests.length > 0).length;
   const passingCount = rows.filter((r) => r.effective === 'pass').length;
@@ -384,8 +339,7 @@ function render(input: RenderInput): string {
   const failingCount = rows.filter((r) => r.effective === 'fail').length;
   const assumedCount = rows.filter((r) => r.req.status === 'assumed' || r.req.status === 'undocumented').length;
 
-  // Every requirement lands in exactly one effective bucket, so these segments
-  // partition the whole set — the meter is an honest whole, not a sampling.
+  // Each requirement lands in exactly one bucket — meter represents the full set.
   const DIST_ORDER: Effective[] = ['pass', 'flaky', 'fail', 'blocked', 'no-results', 'skipped', 'uncovered'];
   const distSegments = DIST_ORDER.map((e) => ({ e, n: rows.filter((r) => r.effective === e).length })).filter(
     (d) => d.n > 0,
@@ -427,9 +381,6 @@ function render(input: RenderInput): string {
   ].join('\n            ');
 
   const passPct = pct(passingCount, total);
-  // The hero is built with the Double-Bezel (outer shell + inner core) so the
-  // headline figure reads as a machined plate floating over the backdrop. The
-  // primary CTA carries a nested "button-in-button" trailing icon.
   const summaryHero = `<div class="shell hero-shell">
         <div class="core hero-core">
           <div class="hero-aura" aria-hidden="true"></div>
@@ -465,7 +416,6 @@ function render(input: RenderInput): string {
       }</span>`
     : '<span class="nav-health is-idle"><i class="dot"></i>no run yet</span>';
 
-  // ── Section 2: last run ─────────────────────────────────────────────────────
   const lastRun = run
     ? `<div class="grid">
         <div class="kv"><div class="k">Run</div><div class="v"><code>${escapeHtml(run)}</code></div></div>
@@ -483,7 +433,6 @@ function render(input: RenderInput): string {
       </div>`
     : `<div class="notice">${escapeHtml(NO_RESULTS_NOTICE)}</div>`;
 
-  // ── Section 3: requirements table ───────────────────────────────────────────
   const reqRows = rows
     .map(
       (r) => `        <tr data-suites="${escapeHtml(r.suites.join(' '))}">
@@ -497,7 +446,6 @@ function render(input: RenderInput): string {
     )
     .join('\n');
 
-  // ── Section 4: test cases table ─────────────────────────────────────────────
   const tcRows = specs.length
     ? specs
         .map((s) => {
@@ -521,7 +469,6 @@ function render(input: RenderInput): string {
         .join('\n')
     : `        <tr><td colspan="4"><div class="notice">${escapeHtml(NO_RESULTS_NOTICE)}</div></td></tr>`;
 
-  // ── Section 5: suites table ─────────────────────────────────────────────────
   const suiteRows = allSuites.length
     ? allSuites
         .map((suite) => {
@@ -538,9 +485,7 @@ function render(input: RenderInput): string {
         .join('\n')
     : `        <tr><td colspan="4"><span class="muted">No suite tags found in the latest run.</span></td></tr>`;
 
-  // ── Section 6: needs attention ──────────────────────────────────────────────
-  // Three independent to-do lists. Blocked and uncovered are mutually exclusive
-  // (effective folds them); assumed/undocumented is a separate documentation axis.
+  // blocked/uncovered are mutually exclusive; assumed/undocumented is a separate axis.
   const uncovered = rows.filter((r) => r.effective === 'uncovered');
   const blockedRows = rows.filter((r) => r.effective === 'blocked');
   const assumed = rows.filter((r) => r.req.status === 'assumed' || r.req.status === 'undocumented');
@@ -594,7 +539,6 @@ function render(input: RenderInput): string {
           .join('\n')
       : `    <div class="all-clear">${ICONS.check}<span>All requirements covered, unblocked, and confirmed.</span></div>`;
 
-  // ── Filter controls ─────────────────────────────────────────────────────────
   const suitePills = ['all', ...allSuites]
     .map(
       (s) =>
@@ -609,7 +553,6 @@ function render(input: RenderInput): string {
     allReqTags.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('') +
     `</select></label>`;
 
-  // The six in-page sections, fed to the shared floating-island nav builder.
   const NAV: ReadonlyArray<readonly [string, string]> = [
     ['summary', 'Summary'],
     ['last-run', 'Last run'],
@@ -619,7 +562,6 @@ function render(input: RenderInput): string {
     ['needs-attention', 'Needs attention'],
   ];
 
-  // ── Document ────────────────────────────────────────────────────────────────
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -726,18 +668,15 @@ ${needsAttention}
   }
 
   function applyFilters() {
-    // Section 3 — requirements: suite filter only.
     var reqRows = document.querySelectorAll('#requirements tbody tr');
     for (var i = 0; i < reqRows.length; i++) {
       reqRows[i].classList.toggle('hidden', !inAttr(reqRows[i], 'data-suites', state.suite));
     }
-    // Section 4 — test cases: suite AND requirement filters, independent + combinable.
     var tcRows = document.querySelectorAll('#test-cases tbody tr');
     for (var j = 0; j < tcRows.length; j++) {
       var show = inAttr(tcRows[j], 'data-suites', state.suite) && inAttr(tcRows[j], 'data-reqs', state.req);
       tcRows[j].classList.toggle('hidden', !show);
     }
-    // Keep every suite pill (both bars) in sync with the shared state.
     var pills = document.querySelectorAll('.pill[data-suite]');
     for (var k = 0; k < pills.length; k++) {
       pills[k].classList.toggle('active', pills[k].getAttribute('data-suite') === state.suite);
